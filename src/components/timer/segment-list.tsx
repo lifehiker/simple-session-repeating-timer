@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SegmentInput } from "@/types/timer";
 import { Button } from "@/components/ui/button";
 import { SegmentForm } from "./segment-form";
+import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from "lucide-react";
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -94,8 +95,10 @@ export function SegmentList({ segments, onChange }: SegmentListProps) {
                   onClick={() => moveUp(index)}
                   disabled={index === 0}
                   className="h-7 w-7 p-0 text-gray-400"
+                  aria-label={`Move ${segment.name} up`}
+                  title="Move up"
                 >
-                  ↑
+                  <ArrowUp className="size-4" />
                 </Button>
                 <Button
                   type="button"
@@ -104,27 +107,33 @@ export function SegmentList({ segments, onChange }: SegmentListProps) {
                   onClick={() => moveDown(index)}
                   disabled={index === segments.length - 1}
                   className="h-7 w-7 p-0 text-gray-400"
+                  aria-label={`Move ${segment.name} down`}
+                  title="Move down"
                 >
-                  ↓
+                  <ArrowDown className="size-4" />
                 </Button>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => setEditingIndex(index)}
-                  className="h-7 px-2 text-xs text-gray-500"
+                  className="h-7 w-7 p-0 text-gray-500"
+                  aria-label={`Edit ${segment.name}`}
+                  title="Edit segment"
                 >
-                  Edit
+                  <Pencil className="size-4" />
                 </Button>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   onClick={() => removeSegment(index)}
-                  className="h-7 px-2 text-xs text-red-400 hover:text-red-600"
+                  className="h-7 w-7 p-0 text-red-400 hover:text-red-600"
                   disabled={segments.length === 1}
+                  aria-label={`Remove ${segment.name}`}
+                  title="Remove segment"
                 >
-                  Remove
+                  <Trash2 className="size-4" />
                 </Button>
               </div>
             </div>
@@ -147,7 +156,8 @@ export function SegmentList({ segments, onChange }: SegmentListProps) {
           onClick={() => setAddingNew(true)}
           className="w-full border-dashed"
         >
-          + Add Segment
+          <Plus className="size-4" />
+          Add Segment
         </Button>
       )}
     </div>

@@ -1,20 +1,19 @@
-import { TimerBuilder } from "@/components/timer/timer-builder";
 import type { Metadata } from "next";
+import { TimerBuilder } from "@/components/timer/timer-builder";
 
 export const metadata: Metadata = {
-  title: "Timer Builder – SessionTimer",
+  title: "Timer Builder",
 };
 
 export default function TimerBuilderPage() {
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="mx-auto max-w-3xl p-4 sm:p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Build Your Timer</h1>
-        <p className="text-gray-500 mt-1">
-          Add segments, choose a mode, then start or save your timer.
+        <h1 className="text-3xl font-semibold tracking-tight text-zinc-950">Build your timer</h1>
+        <p className="mt-2 text-zinc-600">
+          Add named segments, choose session or repeating mode, then start or save the setup.
         </p>
       </div>
-
       <TimerBuilder />
     </div>
   );

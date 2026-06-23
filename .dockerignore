@@ -1,0 +1,11 @@
+.next
+node_modules
+npm-debug.log*
+.git
+.env
+.env.local
+dev.db
+*.db
+*.db-journal
+FORGE_COMPLETION_AUDIT.md
+FORGE_PRD_TASKS.md

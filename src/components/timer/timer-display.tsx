@@ -32,42 +32,42 @@ export function TimerDisplay() {
 
   return (
     <div
-      className="flex flex-col items-center justify-center min-h-[60vh] rounded-2xl text-white p-8 transition-colors duration-1000"
+      className="flex min-h-[62vh] flex-col items-center justify-center rounded-lg p-5 text-center text-white transition-colors duration-1000 sm:min-h-[68vh] sm:p-8"
       style={{ backgroundColor: bgColor }}
     >
       {/* Cycle indicator */}
       {mode === "REPEATING" && (
-        <div className="text-lg font-medium opacity-80 mb-2">
+        <div className="mb-2 text-base font-medium opacity-80 sm:text-lg">
           Cycle {currentCycle}{totalCycles > 0 ? ` of ${totalCycles}` : " (∞)"}
         </div>
       )}
 
       {/* Preset name */}
       {runningState.presetName && (
-        <div className="text-sm opacity-60 mb-4">{runningState.presetName}</div>
+        <div className="mb-4 max-w-full truncate text-sm opacity-70">{runningState.presetName}</div>
       )}
 
       {/* Main countdown */}
-      <div className="text-[10rem] md:text-[12rem] font-mono font-bold leading-none tabular-nums drop-shadow-lg">
+      <div className="w-full font-mono text-[clamp(4.5rem,28vw,12rem)] font-bold leading-none tabular-nums drop-shadow-lg">
         {formatTime(remainingSeconds)}
       </div>
 
       {/* Current segment */}
-      <div className="text-3xl md:text-4xl font-semibold mt-6 opacity-95">
+      <div className="mt-6 max-w-full text-balance break-words text-2xl font-semibold opacity-95 sm:text-4xl">
         {currentSegment?.name ?? ""}
       </div>
 
       {/* Progress bar */}
-      <div className="w-full max-w-lg mt-8 bg-white/20 rounded-full h-2">
+      <div className="mt-8 h-2 w-full max-w-lg rounded-full bg-white/20">
         <div
-          className="bg-white h-2 rounded-full transition-all duration-1000"
+          className="h-2 rounded-full bg-white transition-all duration-1000"
           style={{ width: `${progress * 100}%` }}
         />
       </div>
 
       {/* Next segment */}
       {nextSegment && (
-        <div className="mt-4 text-sm opacity-70">
+        <div className="mt-4 max-w-full truncate text-sm opacity-75">
           Next: {nextSegment.name}
           {mode === "REPEATING" && currentSegmentIndex === segments.length - 1
             ? " (next cycle)"

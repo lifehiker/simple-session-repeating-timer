@@ -1,157 +1,129 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useCallback, useEffect, useRef } from "react";
 import { useTimerStore } from "@/stores/timer-store";
 import { TimerDisplay } from "@/components/timer/timer-display";
 import { TimerControls } from "@/components/timer/timer-controls";
-import { playTransitionSound, playCompleteSound } from "@/lib/audio";
-import { speak } from "@/lib/speech";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
+import { playCompleteSound, playTransitionSound } from "@/lib/audio";
+import { trackEvent } from "@/lib/analytics";
+import { speak } from "@/lib/speech";
 
 export default function TimerRunPage() {
-  const router = useRouter();
   const { runningState, settings, startTimer } = useTimerStore();
-  const prevSegmentIndexRef = useRef<number | null>(null);
-  const prevStatusRef = useRef<string | null>(null);
+  const previousSegmentRef = useRef<number | null>(null);
+  const previousCycleRef = useRef<number | null>(null);
+  const previousStatusRef = useRef<string | null>(null);
 
-  const handleSegmentTransition = useCallback(() => {
-    if (settings.soundEnabled) {
-      playTransitionSound();
-    }
-    if (settings.speechEnabled && runningState) {
-      const seg = runningState.segments[runningState.currentSegmentIndex];
-      if (seg) {
-        speak(seg.name, settings.voiceName || undefined);
-      }
-    }
-  }, [settings, runningState]);
+  const announceTransition = useCallback(() => {
+    if (!runningState) return;
+    const segment = runningState.segments[runningState.currentSegmentIndex];
+    if (settings.soundEnabled) playTransitionSound();
+    if (settings.speechEnabled && segment) speak(segment.name, settings.voiceName || undefined);
+  }, [runningState, settings]);
 
   useEffect(() => {
     if (!runningState) return;
 
-    const prevIdx = prevSegmentIndexRef.current;
-    const prevStatus = prevStatusRef.current;
+    const segmentChanged =
+      previousSegmentRef.current !== null &&
+      previousSegmentRef.current !== runningState.currentSegmentIndex;
+    const cycleChanged =
+      previousCycleRef.current !== null &&
+      previousCycleRef.current !== runningState.currentCycle;
 
-    // Detect segment change
-    if (prevIdx !== null && prevIdx !== runningState.currentSegmentIndex) {
-      handleSegmentTransition();
+    if (segmentChanged || cycleChanged) {
+      announceTransition();
     }
 
-    // Detect completion
-    if (prevStatus !== "completed" && runningState.status === "completed") {
-      if (settings.soundEnabled) {
-        playCompleteSound();
-      }
-      if (settings.speechEnabled) {
-        speak("Session complete!");
-      }
+    if (previousStatusRef.current !== "completed" && runningState.status === "completed") {
+      if (settings.soundEnabled) playCompleteSound();
+      if (settings.speechEnabled) speak("Session complete", settings.voiceName || undefined);
+      trackEvent("timer_completed", { mode: runningState.mode });
     }
 
-    prevSegmentIndexRef.current = runningState.currentSegmentIndex;
-    prevStatusRef.current = runningState.status;
-  }, [runningState, handleSegmentTransition, settings]);
+    previousSegmentRef.current = runningState.currentSegmentIndex;
+    previousCycleRef.current = runningState.currentCycle;
+    previousStatusRef.current = runningState.status;
+  }, [announceTransition, runningState, settings]);
 
-  const handleFullScreen = () => {
+  function toggleFullScreen() {
     if (document.fullscreenElement) {
-      document.exitFullscreen();
+      void document.exitFullscreen();
     } else {
-      document.documentElement.requestFullscreen().catch(console.error);
+      void document.documentElement.requestFullscreen();
     }
-  };
+  }
 
   if (!runningState) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-8 text-center">
-        <div className="text-5xl mb-4">⏱️</div>
-        <h2 className="text-xl font-semibold mb-2">No timer running</h2>
-        <p className="text-gray-500 mb-6">Build a timer first, then start it.</p>
-        <Link href="/app/timer">
-          <Button>Build a Timer</Button>
-        </Link>
+      <div className="grid min-h-screen place-items-center bg-zinc-950 p-6 text-center text-white">
+        <div>
+          <h1 className="text-2xl font-semibold">No timer running</h1>
+          <p className="mt-2 text-zinc-400">Build or choose a preset first.</p>
+          <Button asChild className="mt-6">
+            <Link href="/app/timer">Build timer</Link>
+          </Button>
+        </div>
       </div>
     );
   }
 
-  const isCompleted = runningState.status === "completed";
+  const completed = runningState.status === "completed";
 
   return (
-    <div className="flex flex-col min-h-screen p-4 bg-gray-950">
-      {/* Top bar */}
-      <div className="flex items-center justify-between mb-4">
-        <Link href="/app/timer">
-          <Button variant="ghost" size="sm" className="text-gray-400 hover:text-white">
-            ← Back
-          </Button>
-        </Link>
-        <div className="text-gray-400 text-sm">{runningState.presetName ?? "Timer"}</div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleFullScreen}
-          className="text-gray-400 hover:text-white"
-          title="Toggle fullscreen"
-        >
-          ⛶
+    <div className="fixed inset-0 z-50 flex min-h-screen flex-col overflow-y-auto bg-zinc-950 p-3 sm:p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <Button asChild variant="ghost" className="text-zinc-300 hover:text-white">
+          <Link href="/app/timer">Back</Link>
+        </Button>
+        <div className="text-sm text-zinc-400">{runningState.presetName ?? "Timer"}</div>
+        <Button variant="ghost" className="text-zinc-300 hover:text-white" onClick={toggleFullScreen}>
+          Fullscreen
         </Button>
       </div>
 
-      {/* Timer display */}
-      <div className="flex-1 flex flex-col justify-center">
+      <div className="flex flex-1 flex-col justify-center">
         <TimerDisplay />
-
-        {isCompleted && (
-          <div className="text-center mt-6">
-            <div className="text-2xl font-bold text-white mb-2">Session Complete! 🎉</div>
-            <div className="flex justify-center gap-4 mt-4">
+        {completed ? (
+          <div className="mt-6 flex flex-col items-center gap-3 text-white">
+            <div className="text-2xl font-semibold">Session complete</div>
+            <div className="flex gap-3">
               <Button
-                onClick={() => {
-                  const store = useTimerStore.getState();
-                  store.restartTimer();
-                  // Restart the engine
-                  if (runningState) {
-                    startTimer({
-                      name: runningState.presetName ?? "Timer",
-                      mode: runningState.mode,
-                      segments: runningState.segments.map((s, i) => ({ ...s, position: i })),
-                      repeatCount: runningState.totalCycles,
-                    });
-                  }
-                }}
+                onClick={() =>
+                  startTimer({
+                    name: runningState.presetName ?? "Timer",
+                    mode: runningState.mode,
+                    repeatCount: runningState.totalCycles,
+                    segments: runningState.segments.map((segment, index) => ({ ...segment, position: index })),
+                  })
+                }
               >
-                Run Again
+                Run again
               </Button>
-              <Link href="/app/timer">
-                <Button variant="outline" className="text-gray-900">New Timer</Button>
-              </Link>
+              <Button asChild variant="outline">
+                <Link href="/app/timer">New timer</Link>
+              </Button>
             </div>
           </div>
+        ) : (
+          <TimerControls />
         )}
-
-        {!isCompleted && <TimerControls />}
       </div>
 
-      {/* Bottom: segment list preview */}
-      <div className="mt-6">
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          {runningState.segments.map((seg, i) => (
-            <div
-              key={i}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                i === runningState.currentSegmentIndex
-                  ? "bg-white text-gray-900 scale-110"
-                  : "bg-white/10 text-white/60"
-              }`}
-              style={{
-                backgroundColor: i === runningState.currentSegmentIndex ? "white" : undefined,
-                border: `2px solid ${seg.color ?? "#3b82f6"}`,
-              }}
-            >
-              {seg.name}
-            </div>
-          ))}
-        </div>
+      <div className="mt-5 flex gap-2 overflow-x-auto pb-2">
+        {runningState.segments.map((segment, index) => (
+          <div
+            key={`${segment.name}-${index}`}
+            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium ${
+              index === runningState.currentSegmentIndex ? "bg-white text-zinc-950" : "bg-white/10 text-white/70"
+            }`}
+            style={{ borderColor: segment.color ?? "#3b82f6" }}
+          >
+            {segment.name}
+          </div>
+        ))}
       </div>
     </div>
   );

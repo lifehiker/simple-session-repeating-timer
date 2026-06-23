@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useTimerStore } from "@/stores/timer-store";
+import { useSession } from "next-auth/react";
 import { STARTER_TEMPLATES } from "@/lib/templates";
+import { useTimerStore } from "@/stores/timer-store";
 import { PresetInput } from "@/types/timer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,297 +14,187 @@ import { UpgradeModal } from "@/components/billing/upgrade-modal";
 import { toast } from "sonner";
 
 const FREE_PRESET_LIMIT = 3;
-
 const GUEST_PRESETS_KEY = "ssrt_guest_presets";
 
 interface ApiPreset {
   id: string;
   name: string;
-  mode: string;
+  mode: "SESSION" | "REPEATING";
   repeatCount: number | null;
-  segments: { durationSeconds: number; name: string; color: string; position: number }[];
+  segments: { name: string; durationSeconds: number; color?: string; position: number }[];
 }
 
-function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  if (m >= 60) return `${Math.floor(m / 60)}h ${m % 60}m`;
-  const s = seconds % 60;
-  if (m > 0) return `${m}m${s > 0 ? ` ${s}s` : ""}`;
-  return `${s}s`;
+function formatDuration(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  if (minutes >= 60) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  if (minutes > 0) return `${minutes}m${rest ? ` ${rest}s` : ""}`;
+  return `${rest}s`;
 }
 
-function getTotalDuration(segments: { durationSeconds: number }[]): number {
-  return segments.reduce((sum, s) => sum + s.durationSeconds, 0);
+function totalDuration(segments: { durationSeconds: number }[]) {
+  return segments.reduce((total, segment) => total + segment.durationSeconds, 0);
+}
+
+function readGuestPresets(): PresetInput[] {
+  if (typeof window === "undefined") return [];
+  try {
+    return JSON.parse(localStorage.getItem(GUEST_PRESETS_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
 }
 
 export default function PresetsPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { loadPresetToDraft, startTimer } = useTimerStore();
-
   const [presets, setPresets] = useState<ApiPreset[]>([]);
   const [guestPresets, setGuestPresets] = useState<PresetInput[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [fetchingPresets, setFetchingPresets] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "loading") return;
-
     if (session?.user) {
+      Promise.resolve()
+        .then(() => setFetchingPresets(true));
       fetch("/api/presets")
-        .then((r) => r.json())
-        .then((data) => {
-          setPresets(Array.isArray(data) ? data : []);
-          setLoading(false);
-        })
-        .catch(() => setLoading(false));
-    } else {
-      try {
-        const data = localStorage.getItem(GUEST_PRESETS_KEY);
-        setGuestPresets(data ? JSON.parse(data) : []);
-      } catch {
-        setGuestPresets([]);
-      }
-      setLoading(false);
+        .then((response) => response.json())
+        .then((data) => setPresets(Array.isArray(data) ? data : []))
+        .finally(() => setFetchingPresets(false));
+      return;
     }
+    setGuestPresets(readGuestPresets());
   }, [session, status]);
 
-  function handleRunPreset(preset: ApiPreset | PresetInput) {
-    if ("id" in preset) {
-      startTimer({
-        name: preset.name,
-        mode: preset.mode as "SESSION" | "REPEATING",
-        repeatCount: preset.repeatCount ?? undefined,
-        segments: preset.segments.map((s, i) => ({ ...s, position: i })),
-      });
-    } else {
-      startTimer(preset);
-    }
+  function runPreset(preset: ApiPreset | PresetInput) {
+    startTimer({
+      name: preset.name,
+      mode: preset.mode,
+      repeatCount: "repeatCount" in preset ? preset.repeatCount ?? undefined : undefined,
+      segments: preset.segments.map((segment, index) => ({ ...segment, position: index })),
+    });
     router.push("/app/timer/run");
   }
 
-  function handleLoadTemplate(template: PresetInput) {
-    loadPresetToDraft(template);
+  function customizePreset(preset: ApiPreset | PresetInput) {
+    loadPresetToDraft({
+      name: preset.name,
+      mode: preset.mode,
+      repeatCount: "repeatCount" in preset ? preset.repeatCount ?? undefined : undefined,
+      segments: preset.segments.map((segment, index) => ({ ...segment, position: index })),
+    });
     router.push("/app/timer");
-    toast.success(`Loaded template: ${template.name}`);
   }
 
-  async function handleDelete(id: string) {
+  async function deletePreset(id: string) {
     setDeleting(id);
     try {
-      const res = await fetch(`/api/presets/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setPresets((prev) => prev.filter((p) => p.id !== id));
-        toast.success("Preset deleted");
-      } else {
-        toast.error("Failed to delete preset");
-      }
+      const response = await fetch(`/api/presets/${id}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Delete failed");
+      setPresets((current) => current.filter((preset) => preset.id !== id));
+      toast.success("Preset deleted");
     } catch {
-      toast.error("Failed to delete preset");
+      toast.error("Could not delete preset");
     } finally {
       setDeleting(null);
     }
   }
 
-  function handleGuestDelete(index: number) {
-    const updated = guestPresets.filter((_, i) => i !== index);
+  function deleteGuestPreset(index: number) {
+    const updated = guestPresets.filter((_, itemIndex) => itemIndex !== index);
     setGuestPresets(updated);
     localStorage.setItem(GUEST_PRESETS_KEY, JSON.stringify(updated));
     toast.success("Preset deleted");
   }
 
-  const presetCount = session?.user ? presets.length : guestPresets.length;
-  const isAtLimit = !session?.user ? presetCount >= FREE_PRESET_LIMIT : false;
-
-  if (loading) {
-    return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 bg-gray-100 rounded-lg" />
-          ))}
-        </div>
-      </div>
-    );
-  }
+  const activePresets = session?.user ? presets : guestPresets;
+  const loading = status === "loading" || fetchingPresets;
 
   return (
-    <div className="p-6 max-w-3xl">
-      <div className="flex items-center justify-between mb-6">
+    <div className="mx-auto max-w-5xl p-4 sm:p-6">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Saved Presets</h1>
-          <p className="text-gray-500 mt-1 text-sm">
-            {session?.user
-              ? `${presets.length} preset${presets.length !== 1 ? "s" : ""} saved`
-              : `${guestPresets.length} / ${FREE_PRESET_LIMIT} guest presets`}
+          <h1 className="text-3xl font-semibold tracking-tight text-zinc-950">Presets and templates</h1>
+          <p className="mt-2 text-zinc-600">
+            {session?.user ? `${presets.length} saved presets` : `${guestPresets.length}/${FREE_PRESET_LIMIT} guest preset slots used`}
           </p>
         </div>
-        <Link href="/app/timer">
-          <Button>+ New Timer</Button>
-        </Link>
+        <Button asChild>
+          <Link href="/app/timer">New timer</Link>
+        </Button>
       </div>
 
-      {/* Free tier indicator */}
-      {!session?.user && (
-        <Card className="mb-4 bg-amber-50 border-amber-200">
-          <CardContent className="py-3 flex items-center justify-between">
-            <span className="text-sm text-amber-800">
-              Guest presets: {guestPresets.length}/{FREE_PRESET_LIMIT} used
-            </span>
-            {isAtLimit && (
-              <Button size="sm" onClick={() => setShowUpgrade(true)}>
-                Upgrade
-              </Button>
-            )}
+      {!session?.user ? (
+        <Card className="mb-5 border-amber-200 bg-amber-50">
+          <CardContent className="flex flex-col gap-3 p-4 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+            <span>Guest presets stay on this device. Create an account to save across devices.</span>
+            {guestPresets.length >= FREE_PRESET_LIMIT ? <Button size="sm" onClick={() => setShowUpgrade(true)}>Upgrade</Button> : null}
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
-      {/* User presets */}
-      {session?.user && presets.length > 0 && (
-        <div className="space-y-2 mb-8">
-          <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Your Presets</h2>
-          {presets.map((preset) => (
-            <div
-              key={preset.id}
-              className="flex items-center gap-4 p-4 border rounded-lg bg-white hover:border-gray-300"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900 truncate">{preset.name}</div>
-                <div className="text-sm text-gray-500">
-                  {preset.mode === "REPEATING" ? `×${preset.repeatCount ?? "∞"} · ` : ""}
-                  {preset.segments.length} segments ·{" "}
-                  {formatDuration(getTotalDuration(preset.segments))}
+      {loading ? (
+        <div className="grid gap-3">
+          {[1, 2, 3].map((item) => <div key={item} className="h-20 animate-pulse rounded-md bg-zinc-100" />)}
+        </div>
+      ) : activePresets.length ? (
+        <div className="mb-8 space-y-3">
+          <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Your presets</h2>
+          {activePresets.map((preset, index) => (
+            <div key={"id" in preset ? preset.id : `${preset.name}-${index}`} className="flex flex-col gap-3 rounded-md border bg-white p-4 sm:flex-row sm:items-center">
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">{preset.name}</div>
+                <div className="text-sm text-zinc-500">
+                  {preset.mode === "REPEATING" ? `Repeating ${"repeatCount" in preset ? preset.repeatCount ?? "forever" : "forever"} · ` : "Session · "}
+                  {preset.segments.length} segments · {formatDuration(totalDuration(preset.segments))}
                 </div>
               </div>
-              <Badge variant="secondary" className="text-xs">
-                {preset.mode === "SESSION" ? "Session" : "Repeating"}
-              </Badge>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => handleRunPreset(preset)}
-                >
-                  Run
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    loadPresetToDraft({
-                      name: preset.name,
-                      mode: preset.mode as "SESSION" | "REPEATING",
-                      repeatCount: preset.repeatCount ?? undefined,
-                      segments: preset.segments,
-                    });
-                    router.push("/app/timer");
-                  }}
-                >
-                  Edit
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleDelete(preset.id)}
-                  disabled={deleting === preset.id}
-                  className="text-red-400 hover:text-red-600"
-                >
-                  {deleting === preset.id ? "..." : "Delete"}
-                </Button>
+              <Badge variant="secondary">{preset.mode === "SESSION" ? "Session" : "Repeating"}</Badge>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => runPreset(preset)}>Run</Button>
+                <Button size="sm" variant="outline" onClick={() => customizePreset(preset)}>Edit</Button>
+                {"id" in preset ? (
+                  <Button size="sm" variant="ghost" disabled={deleting === preset.id} onClick={() => deletePreset(preset.id)}>
+                    {deleting === preset.id ? "Deleting..." : "Delete"}
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="ghost" onClick={() => deleteGuestPreset(index)}>Delete</Button>
+                )}
               </div>
             </div>
           ))}
         </div>
-      )}
-
-      {/* Guest presets */}
-      {!session?.user && guestPresets.length > 0 && (
-        <div className="space-y-2 mb-8">
-          <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Your Presets (Local)</h2>
-          {guestPresets.map((preset, index) => (
-            <div
-              key={index}
-              className="flex items-center gap-4 p-4 border rounded-lg bg-white"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-gray-900 truncate">{preset.name}</div>
-                <div className="text-sm text-gray-500">
-                  {preset.segments.length} segments
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={() => handleRunPreset(preset)}>Run</Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleGuestDelete(index)}
-                  className="text-red-400"
-                >
-                  Delete
-                </Button>
-              </div>
-            </div>
-          ))}
+      ) : (
+        <div className="mb-8 rounded-md border border-dashed p-8 text-center text-zinc-600">
+          No saved presets yet.
         </div>
       )}
 
-      {/* Empty state */}
-      {presetCount === 0 && (
-        <div className="text-center py-12 text-gray-500">
-          <div className="text-5xl mb-4">📋</div>
-          <p className="mb-4">No saved presets yet.</p>
-          <Link href="/app/timer">
-            <Button variant="outline">Build Your First Timer</Button>
-          </Link>
-        </div>
-      )}
-
-      {/* Starter Templates */}
-      <div>
-        <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">Starter Templates</h2>
-        <div className="grid sm:grid-cols-2 gap-3">
+      <section>
+        <h2 className="text-sm font-medium uppercase tracking-wide text-zinc-500">Starter templates</h2>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
           {STARTER_TEMPLATES.map((template) => (
-            <Card key={template.name} className="hover:border-blue-300 hover:shadow-sm transition-all">
-              <CardContent className="pt-4 pb-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="font-medium text-gray-900 text-sm">{template.name}</div>
-                  <Badge variant="secondary" className="text-xs">
-                    {template.mode === "SESSION" ? "Session" : `×${template.repeatCount ?? "∞"}`}
-                  </Badge>
+            <Card key={template.name}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="font-medium">{template.name}</div>
+                  <Badge variant="secondary">{template.mode === "SESSION" ? "Session" : `${template.repeatCount ?? "∞"} cycles`}</Badge>
                 </div>
-                <div className="text-xs text-gray-500 mb-3">
-                  {template.segments.map((s) => s.name).join(" → ")}
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-xs"
-                    onClick={() => handleRunPreset(template)}
-                  >
-                    Run
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="text-xs"
-                    onClick={() => handleLoadTemplate(template)}
-                  >
-                    Customize
-                  </Button>
+                <p className="mt-2 text-sm text-zinc-500">{template.segments.map((segment) => segment.name).join(" -> ")}</p>
+                <div className="mt-4 flex gap-2">
+                  <Button size="sm" onClick={() => runPreset(template)}>Run</Button>
+                  <Button size="sm" variant="outline" onClick={() => customizePreset(template)}>Customize</Button>
                 </div>
               </CardContent>
             </Card>
           ))}
         </div>
-      </div>
+      </section>
 
-      <UpgradeModal
-        open={showUpgrade}
-        onClose={() => setShowUpgrade(false)}
-        reason="You've used all 3 guest preset slots. Create a free account for more."
-      />
+      <UpgradeModal open={showUpgrade} onClose={() => setShowUpgrade(false)} reason="Guest mode includes three local preset slots. Pro unlocks unlimited saved presets." />
     </div>
   );
 }

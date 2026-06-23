@@ -2,6 +2,7 @@
 
 import { useTimerStore } from "@/stores/timer-store";
 import { Button } from "@/components/ui/button";
+import { Pause, Play, RotateCcw, SkipBack, SkipForward } from "lucide-react";
 
 export function TimerControls() {
   const { runningState, startTimer, pauseTimer, resumeTimer, skipSegment, prevSegment, restartTimer } =
@@ -30,36 +31,39 @@ export function TimerControls() {
   const isCompleted = status === "completed";
 
   return (
-    <div className="flex items-center justify-center gap-4 mt-6">
+    <div className="mt-6 flex items-center justify-center gap-3 sm:gap-4">
       <Button
         variant="outline"
         size="lg"
         onClick={() => prevSegment()}
         disabled={isCompleted}
-        className="h-14 w-14 rounded-full p-0 text-xl"
+        className="h-12 w-12 rounded-full p-0 sm:h-14 sm:w-14"
         title="Previous segment"
+        aria-label="Previous segment"
       >
-        ⏮
+        <SkipBack className="size-5" />
       </Button>
 
       <Button
         variant="outline"
         size="lg"
         onClick={restartTimer}
-        className="h-12 w-12 rounded-full p-0 text-lg"
+        className="h-11 w-11 rounded-full p-0 sm:h-12 sm:w-12"
         title="Restart"
+        aria-label="Restart"
       >
-        ↺
+        <RotateCcw className="size-5" />
       </Button>
 
       <Button
         size="lg"
         onClick={handlePlayPause}
         disabled={isCompleted}
-        className="h-16 w-16 rounded-full p-0 text-2xl shadow-lg"
+        className="h-14 w-14 rounded-full p-0 shadow-lg sm:h-16 sm:w-16"
         title={status === "running" ? "Pause" : "Play"}
+        aria-label={status === "running" ? "Pause" : "Play"}
       >
-        {status === "running" ? "⏸" : "▶"}
+        {status === "running" ? <Pause className="size-6" /> : <Play className="size-6" />}
       </Button>
 
       <Button
@@ -67,10 +71,11 @@ export function TimerControls() {
         size="lg"
         onClick={() => skipSegment()}
         disabled={isCompleted}
-        className="h-12 w-12 rounded-full p-0 text-lg"
+        className="h-11 w-11 rounded-full p-0 sm:h-12 sm:w-12"
         title="Skip segment"
+        aria-label="Skip segment"
       >
-        ⏭
+        <SkipForward className="size-5" />
       </Button>
     </div>
   );

@@ -1,21 +1,9 @@
 {
-  "name": "SessionTimer",
-  "short_name": "SessionTimer",
-  "description": "Visible session and repeating timer with named segments",
+  "name": "VoiceLog",
+  "short_name": "VoiceLog",
+  "description": "Audition pipeline and rate tracker for freelance voice actors",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#3b82f6",
-  "icons": [
-    {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
+  "theme_color": "#18181b"
 }

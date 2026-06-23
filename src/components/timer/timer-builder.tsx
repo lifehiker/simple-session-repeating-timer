@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useTimerStore } from "@/stores/timer-store";
@@ -14,6 +14,7 @@ import { SegmentList } from "./segment-list";
 import { RepeatCountInput } from "./repeat-count-input";
 import { toast } from "sonner";
 import { trackEvent } from "@/lib/analytics";
+import { Play } from "lucide-react";
 
 const GUEST_PRESETS_KEY = "ssrt_guest_presets";
 
@@ -42,16 +43,16 @@ export function TimerBuilder({ initialPreset }: TimerBuilderProps) {
   const router = useRouter();
   const { data: session } = useSession();
   const { builderDraft, setBuilderDraft, loadPresetToDraft, startTimer } = useTimerStore();
-
-  const draft = initialPreset ? builderDraft : builderDraft;
-
   const [saving, setSaving] = useState(false);
 
-  const currentDraft = initialPreset ?? draft;
+  useEffect(() => {
+    if (initialPreset) loadPresetToDraft(initialPreset);
+  }, [initialPreset, loadPresetToDraft]);
+
+  const currentDraft = builderDraft;
 
   function handleLoadTemplate(template: PresetInput) {
     loadPresetToDraft(template);
-    toast.success(`Loaded template: ${template.name}`);
     trackEvent("template_used", { template: template.name });
   }
 
@@ -74,7 +75,8 @@ export function TimerBuilder({ initialPreset }: TimerBuilderProps) {
     if (!session?.user) {
       // Guest save
       const guestPresets = getGuestPresets();
-      if (guestPresets.length >= 3) {
+      const replacingExisting = guestPresets.some((preset) => preset.name === currentDraft.name);
+      if (guestPresets.length >= 3 && !replacingExisting) {
         toast.error("Free limit: 3 saved presets. Sign up for more!");
         return;
       }
@@ -139,7 +141,7 @@ export function TimerBuilder({ initialPreset }: TimerBuilderProps) {
         <Input
           id="preset-name"
           placeholder="My Timer"
-          value={draft.name}
+          value={currentDraft.name}
           onChange={(e) => setBuilderDraft({ name: e.target.value })}
         />
       </div>
@@ -148,20 +150,20 @@ export function TimerBuilder({ initialPreset }: TimerBuilderProps) {
       <div className="space-y-2">
         <Label>Mode</Label>
         <ModeToggle
-          mode={draft.mode}
+          mode={currentDraft.mode}
           onChange={(mode) => setBuilderDraft({ mode })}
         />
         <p className="text-xs text-gray-500">
-          {draft.mode === "SESSION"
+          {currentDraft.mode === "SESSION"
             ? "Session: run segments once in order"
             : "Repeating: repeat segments for N cycles"}
         </p>
       </div>
 
       {/* Repeat Count */}
-      {draft.mode === "REPEATING" && (
+      {currentDraft.mode === "REPEATING" && (
         <RepeatCountInput
-          value={draft.repeatCount ?? 0}
+          value={currentDraft.repeatCount ?? 0}
           onChange={(repeatCount) => setBuilderDraft({ repeatCount })}
         />
       )}
@@ -170,7 +172,7 @@ export function TimerBuilder({ initialPreset }: TimerBuilderProps) {
       <div className="space-y-2">
         <Label>Segments</Label>
         <SegmentList
-          segments={draft.segments}
+          segments={currentDraft.segments}
           onChange={(segments) => setBuilderDraft({ segments })}
         />
       </div>
@@ -178,7 +180,8 @@ export function TimerBuilder({ initialPreset }: TimerBuilderProps) {
       {/* Actions */}
       <div className="flex gap-3 pt-2">
         <Button onClick={handleStart} className="flex-1">
-          ▶ Start Timer
+          <Play className="size-4" />
+          Start Timer
         </Button>
         <Button variant="outline" onClick={handleSave} disabled={saving}>
           {saving ? "Saving..." : "Save Preset"}

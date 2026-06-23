@@ -70,8 +70,10 @@ model Preset {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   segments Segment[]
+
+  @@index([userId, updatedAt])
 }
 
 model Segment {
@@ -83,6 +85,8 @@ model Segment {
   position        Int
 
   preset Preset @relation(fields: [presetId], references: [id], onDelete: Cascade)
+
+  @@index([presetId, position])
 }
 
 model UserSettings {
@@ -103,6 +107,7 @@ model Subscription {
   stripeSubscriptionId String?
   stripePriceId        String?
   status               String    @default("inactive")
+  tier                 String    @default("free")
   currentPeriodEnd     DateTime?
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt

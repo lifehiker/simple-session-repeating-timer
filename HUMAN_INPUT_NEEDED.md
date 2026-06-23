@@ -19,6 +19,8 @@
 - **STRIPE_SECRET_KEY**: From Stripe Dashboard → Developers → API Keys
 - **NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY**: Same location (pk_live_...)
 - **STRIPE_WEBHOOK_SECRET**: From Stripe Dashboard → Webhooks → Signing Secret
+- **STRIPE_PRO_PRICE_ID**: Stripe monthly Pro recurring price ID
+- **STRIPE_PRO_ANNUAL_PRICE_ID**: Stripe annual Pro recurring price ID
 - **Without these**: The app shows pricing/upgrade UI but checkout will return a 503 error
 
 #### Stripe Setup Steps (if enabling payments)
@@ -32,8 +34,13 @@
 
 ### Resend (Email)
 - **RESEND_API_KEY**: From resend.com
-- **EMAIL_FROM**: e.g., `noreply@yourdomain.com`
+- **RESEND_FROM_EMAIL**: e.g., `noreply@yourdomain.com`
 - **Without these**: No transactional emails (the app does not currently send emails in MVP)
+
+### Google OAuth (Optional)
+- **AUTH_GOOGLE_ID**: Google OAuth client ID
+- **AUTH_GOOGLE_SECRET**: Google OAuth client secret
+- **Without these**: Google sign-in is disabled server-side; email/password sign-in and guest mode still work
 
 ## Deployment Environment Variables Checklist
 
@@ -47,4 +54,10 @@ NEXT_PUBLIC_APP_URL="https://yourdomain.com"
 STRIPE_SECRET_KEY="sk_live_..."
 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_live_..."
 STRIPE_WEBHOOK_SECRET="whsec_..."
+STRIPE_PRO_PRICE_ID="price_monthly_..."
+STRIPE_PRO_ANNUAL_PRICE_ID="price_annual_..."
+RESEND_API_KEY="re_..."
+RESEND_FROM_EMAIL="noreply@yourdomain.com"
+AUTH_GOOGLE_ID="..."
+AUTH_GOOGLE_SECRET="..."
 ```

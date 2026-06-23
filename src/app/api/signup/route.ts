@@ -1,50 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-import { z } from "zod";
-
-const signupSchema = z.object({
-  name: z.string().min(1).max(100),
-  email: z.string().email(),
-  password: z.string().min(8),
-});
+import { ensureSubscription } from "@/lib/billing";
+import { sendWelcomeEmail } from "@/lib/email";
 
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const parsed = signupSchema.safeParse(body);
+  const body = await req.json().catch(() => null);
+  const email = String(body?.email ?? "").trim().toLowerCase();
+  const password = String(body?.password ?? "");
+  const name = String(body?.name ?? "").trim();
 
-    if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0]?.message ?? "Validation error" },
-        { status: 400 }
-      );
-    }
-
-    const { name, email, password } = parsed.data;
-
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      return NextResponse.json(
-        { error: "An account with this email already exists" },
-        { status: 409 }
-      );
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 12);
-    const user = await prisma.user.create({
-      data: { name, email, password: hashedPassword },
-    });
-
-    return NextResponse.json(
-      { id: user.id, email: user.email, name: user.name },
-      { status: 201 }
-    );
-  } catch (err) {
-    console.error("[signup] error:", err);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+  if (!email || !password || password.length < 8) {
+    return NextResponse.json({ error: "Email and an 8+ character password are required." }, { status: 400 });
   }
+
+  const existing = await prisma.user.findUnique({ where: { email } });
+  if (existing) {
+    return NextResponse.json({ error: "An account already exists for that email." }, { status: 409 });
+  }
+
+  const user = await prisma.user.create({
+    data: {
+      email,
+      name: name || null,
+      password: await bcrypt.hash(password, 12),
+    },
+  });
+  await ensureSubscription(user.id);
+  await sendWelcomeEmail(user.email, user.name).catch((error) => console.error("[signup email]", error));
+
+  return NextResponse.json({ ok: true });
 }
